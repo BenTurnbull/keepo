@@ -1,4 +1,4 @@
-package util
+package io
 
 import (
 	"bufio"
@@ -6,6 +6,7 @@ import (
 	"os"
 	"io"
 	"path/filepath"
+	"../util"
 )
 
 const storeName = "keepo.dat"
@@ -43,28 +44,28 @@ func (store Store) GetDataMap() (map[string][]byte) {
 			if err == io.EOF {
 				return dataMap
 			}
-			CheckError(err)
+			util.CheckError(err)
 
 			keyLengthInt := int(*keyLength)
-			CheckState(keyLengthInt > 0, "key length may not be negative")
+			util.CheckState(keyLengthInt > 0, "key length may not be negative")
 
 			keyNameBytes := make([]byte, keyLengthInt)
 			err = binary.Read(r, binary.LittleEndian, keyNameBytes)
-			CheckError(err)
+			util.CheckError(err)
 
 			keyName := string(keyNameBytes)
 
 			// read value
 			valueLength := new(uint32)
 			err = binary.Read(r, binary.LittleEndian, valueLength)
-			CheckError(err)
+			util.CheckError(err)
 
 			valueLengthInt := int(*valueLength)
-			CheckState(valueLengthInt > 0, "value Length may not be negative")
+			util.CheckState(valueLengthInt > 0, "value Length may not be negative")
 
 			valueBytes := make([]byte, valueLengthInt)
 			err = binary.Read(r, binary.LittleEndian, valueBytes)
-			CheckError(err)
+			util.CheckError(err)
 
 			dataMap[keyName] = valueBytes
 		}
@@ -93,17 +94,17 @@ func (store Store) SetDataMap(dataMap map[string][]byte) error {
 
 			kLen := len(k)
 			err = binary.Write(w, binary.LittleEndian, uint32(kLen))
-			CheckError(err)
+			util.CheckError(err)
 
 			err = binary.Write(w, binary.LittleEndian, []byte(k))
-			CheckError(err)
+			util.CheckError(err)
 
 			vLen := len(v)
 			err = binary.Write(w, binary.LittleEndian, uint32(vLen))
-			CheckError(err)
+			util.CheckError(err)
 
 			err = binary.Write(w, binary.LittleEndian, []byte(v))
-			CheckError(err)
+			util.CheckError(err)
 
 			w.Flush()
 		}

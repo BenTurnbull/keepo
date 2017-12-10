@@ -1,12 +1,12 @@
-package crypt
+package crypto
 
 import (
-	"crypto/cipher"
 	"crypto/aes"
-	"encoding/base64"
-	"io"
+	"crypto/cipher"
 	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"io"
 )
 
 func Encrypt(key, text []byte) ([]byte, error) {

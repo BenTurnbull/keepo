@@ -4,8 +4,9 @@ import (
 	"os"
 	"fmt"
 	"crypto/sha256"
-	"./crypt"
+	"./crypto"
 	"./util"
+	"./io"
 	"encoding/base64"
 	"sort"
 	"math/rand"
@@ -17,49 +18,69 @@ import (
 const version = 1.0
 
 func main() {
-
-	if len(os.Args) == 1 {
-		printUsage()
-	}
-
 	dir := path.Dir(os.Args[0])
-	store := util.Store{Path:dir}
-	args := os.Args[2:]
-	switch os.Args[1] {
-	case "list":
-		list(store)
-	case "set":
-		util.CheckState(len(args) > 0, "need a 'name' argument")
+	store := io.Store{Path:dir}
 
-		if len(args) == 1 { // no value supplied so generate random
-			r := rand.New(rand.NewSource(time.Now().UnixNano()))
-			bytes := make([]byte, 0, 32)
-			r.Read(bytes)
+	arguments := os.Args[1:]
+	show := parameterSearch(arguments)
+	command := commandSearch(arguments)
+	processCommand(store, command, show)
+}
 
-			hash := sha256.New()
-			hash.Write(bytes)
-			value := base64.StdEncoding.EncodeToString(hash.Sum(nil))
-
-			args = append(args, value)
+func parameterSearch(parameters []string) (show bool) {
+	for index := 0; index < len(parameters); index++ {
+		switch parameters[index] {
+		case "-s", "--show":
+			return true
 		}
-		set(store, args)
+	}
+	return false
+}
 
-	case "get":
-		util.CheckState(len(args) > 0, "need a 'name' argument")
-
-		value := get(store, args[0])
-		if value != nil {
-			if len(args) > 1 && (args[1] == "-s" || args[1] == "--show"){
-				fmt.Printf("%s\n", value)
-			}
-			err := util.CopyToClipboard(value)
-			if err != nil {
-				fmt.Printf("%s\n", value)
-			}
+func commandSearch(parameters []string) (command []string) {
+	for index := 0; index < len(parameters); index++ {
+		switch parameters[index] {
+		case "list", "get", "set":
+			return parameters[index:]
 		}
+	}
+	return nil
+}
 
-	default:
+func processCommand(store io.Store, command []string, show bool) {
+	if command == nil {
 		printUsage()
+		os.Exit(1)
+	} else {
+
+		switch command[0] {
+		case "list":
+			list(store)
+
+		case "get":
+			name := getName(command)
+
+			value := get(store, name)
+			util.CheckState(value != nil, fmt.Sprintf("Expected name '%s' to have a value", name))
+
+			if show {
+				fmt.Printf("%s\n", value)
+			} else {
+				err := io.CopyToClipboard(value)
+				if err != nil {
+					fmt.Printf("%s\n", value)
+				}
+			}
+
+		case "set":
+			name := getName(command)
+			value := getValue(command)
+			set(store, name, value)
+
+		default:
+			printUsage()
+			os.Exit(1)
+		}
 	}
 }
 
@@ -70,24 +91,50 @@ func printUsage() {
 		"version: " + strconv.FormatFloat(version, 'f', 1, 64) +
 		"\n" +
 		"\n" +
-		"usage: " + boldOpen + "keepo <command> [<args>]" + boldClose +
+		"usage: " + boldOpen + "keepo [options] <command>" + boldClose +
 		"\n" +
 		"\n" +
 		"commands:" +
 		"\n" +
-		"\t" + boldOpen + "set <name> [value]" + boldClose + "\t\t" + "sets a name and its value (may be omitted for random value)" +
+		"\t" + boldOpen + "set <name> [value]" + boldClose + "\t\t" + "sets a name and its value (omit for random value)" +
 		"\n" +
 		"\n" +
-		"\t" + boldOpen + "get <name> [option]" + boldClose + "\t\t" + "gets the value for a name" +
+		"\t" + boldOpen + "get <name>" + boldClose + "\t\t\t" + "gets the value for a name" +
+		"\n" +
 		"\n" +
 		"\toptions:" +
 		"\n" +
 		"\t\t" + boldOpen + "-s, --show" + boldClose + "\t\tsend output to stdout" +
 		"\n")
-	os.Exit(1)
 }
 
-func list(store util.Store) {
+func getName(command []string) string {
+	util.CheckState(len(command) > 1, "need a 'name' argument")
+	name := command[1]
+	return name
+}
+
+func getValue(command []string) string {
+	var value string
+	if len(command) > 2 {
+		value = command[2]
+	} else {
+		value = getRandomValue()
+	}
+	return value
+}
+
+func getRandomValue() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	bytes := make([]byte, 0, 32)
+	r.Read(bytes)
+
+	hash := sha256.New()
+	hash.Write(bytes)
+	return string(base64.RawURLEncoding.EncodeToString(hash.Sum(nil))[:8])
+}
+
+func list(store io.Store) {
 	dataMap := store.GetDataMap()
 	keys := make([]string, 0, len(dataMap))
 	for key := range dataMap {
@@ -99,17 +146,16 @@ func list(store util.Store) {
 	}
 }
 
-func get(store util.Store, name string) []byte {
-
+func get(store io.Store, name string) []byte {
 	dataMap := store.GetDataMap()
 	dataValue := dataMap[name]
 	util.CheckState(len(dataValue) > 0, "name not found")
 
 	hash := sha256.New()
-	hash.Write([]byte(util.ReadPassword()))
+	hash.Write([]byte(io.ReadPassword()))
 	key := hash.Sum(nil)
 
-	value, err := crypt.Decrypt(key, dataValue)
+	value, err := crypto.Decrypt(key, dataValue)
 	if err != nil {
 		switch err.(type) {
 		case base64.CorruptInputError: // not ideal, need to use authenticated encryption
@@ -123,18 +169,17 @@ func get(store util.Store, name string) []byte {
 	return value
 }
 
-func set(store util.Store, setterArgs []string) {
-
+func set(store io.Store, name string, value string) {
 	hash := sha256.New()
-	hash.Write([]byte(util.ReadPassword()))
+	hash.Write([]byte(io.ReadPassword()))
 	key := hash.Sum(nil)
 
 	dataMap := store.GetDataMap()
 
-	value, err := crypt.Encrypt(key, []byte(setterArgs[1]))
+	encrypted, err := crypto.Encrypt(key, []byte(value))
 	util.CheckError(err)
 
-	dataMap[setterArgs[0]] = value
+	dataMap[name] = encrypted
 
 	err = store.SetDataMap(dataMap)
 	util.CheckError(err)

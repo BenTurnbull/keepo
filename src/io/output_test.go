@@ -1,4 +1,4 @@
-package util
+package io
 
 import (
 	"testing"
@@ -7,6 +7,5 @@ import (
 func TestCopyToClipboard(t *testing.T) {
 
 	CopyToClipboard([]byte("test"))
-
 
 }
