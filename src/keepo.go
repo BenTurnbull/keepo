@@ -22,19 +22,22 @@ func main() {
 	store := io.Store{Path:dir}
 
 	arguments := os.Args[1:]
-	show := parameterSearch(arguments)
+	show, copy := parameterSearch(arguments)
 	command := commandSearch(arguments)
-	processCommand(store, command, show)
+	processCommand(store, command, show, copy)
 }
 
-func parameterSearch(parameters []string) (show bool) {
+func parameterSearch(parameters []string) (show bool, copy bool) {
+	show, copy = false, false
 	for index := 0; index < len(parameters); index++ {
 		switch parameters[index] {
 		case "-s", "--show":
-			return true
+			show = true
+		case "-c", "--copy":
+			copy = true
 		}
 	}
-	return false
+	return show, copy
 }
 
 func commandSearch(parameters []string) (command []string) {
@@ -47,7 +50,7 @@ func commandSearch(parameters []string) (command []string) {
 	return nil
 }
 
-func processCommand(store io.Store, command []string, show bool) {
+func processCommand(store io.Store, command []string, show bool, copy bool) {
 	if command == nil {
 		printUsage()
 		os.Exit(1)
@@ -63,13 +66,13 @@ func processCommand(store io.Store, command []string, show bool) {
 			value := get(store, name)
 			util.CheckState(value != nil, fmt.Sprintf("Expected name '%s' to have a value", name))
 
-			if show {
-				fmt.Printf("%s\n", value)
-			} else {
+			if copy {
 				err := io.CopyToClipboard(value)
-				if err != nil {
-					fmt.Printf("%s\n", value)
-				}
+				util.CheckError(err)
+			}
+
+			if show || !copy {
+				fmt.Printf("%s\n", value)
 			}
 
 		case "set":
@@ -89,22 +92,17 @@ func printUsage() {
 	boldClose := "\033[0m"
 	fmt.Println(
 		"version: " + strconv.FormatFloat(version, 'f', 1, 64) +
-		"\n" +
-		"\n" +
+		"\n\n" +
 		"usage: " + boldOpen + "keepo [options] <command>" + boldClose +
-		"\n" +
-		"\n" +
-		"commands:" +
-		"\n" +
+		"\n\n" +
+		"commands:\n" +
 		"\t" + boldOpen + "set <name> [value]" + boldClose + "\t\t" + "sets a name and its value (omit for random value)" +
-		"\n" +
-		"\n" +
+		"\n\n" +
 		"\t" + boldOpen + "get <name>" + boldClose + "\t\t\t" + "gets the value for a name" +
-		"\n" +
-		"\n" +
-		"\toptions:" +
-		"\n" +
-		"\t\t" + boldOpen + "-s, --show" + boldClose + "\t\tsend output to stdout" +
+		"\n\n" +
+		"\toptions:\n" +
+		"\t\t" + boldOpen + "-s, --show" + boldClose + "\t\tsend output to stdout\n" +
+		"\t\t" + boldOpen + "-c, --copy" + boldClose + "\t\tcopy output to clipboard" +
 		"\n")
 }
 
