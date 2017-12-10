@@ -3,21 +3,18 @@ package main
 import (
 	"os"
 	"fmt"
-	"io"
-	"bufio"
-	"encoding/binary"
 	"crypto/sha256"
 	"./crypt"
 	"./util"
 	"encoding/base64"
 	"sort"
 	"math/rand"
+	"path"
 	"time"
 	"strconv"
 )
 
 const version = 1.0
-const storeName = "keepo.dat"
 
 func main() {
 
@@ -25,12 +22,14 @@ func main() {
 		printUsage()
 	}
 
+	dir := path.Dir(os.Args[0])
+	store := util.Store{Path:dir}
 	args := os.Args[2:]
 	switch os.Args[1] {
 	case "list":
-		list()
+		list(store)
 	case "set":
-		checkState(len(args) > 0, "need a 'name' argument")
+		util.CheckState(len(args) > 0, "need a 'name' argument")
 
 		if len(args) == 1 { // no value supplied so generate random
 			r := rand.New(rand.NewSource(time.Now().UnixNano()))
@@ -43,12 +42,12 @@ func main() {
 
 			args = append(args, value)
 		}
-		set(args)
+		set(store, args)
 
 	case "get":
-		checkState(len(args) > 0, "need a 'name' argument")
+		util.CheckState(len(args) > 0, "need a 'name' argument")
 
-		value := get(args[0])
+		value := get(store, args[0])
 		if value != nil {
 			if len(args) > 1 && (args[1] == "-s" || args[1] == "--show"){
 				fmt.Printf("%s\n", value)
@@ -88,8 +87,8 @@ func printUsage() {
 	os.Exit(1)
 }
 
-func list() {
-	dataMap := getDataMap()
+func list(store util.Store) {
+	dataMap := store.GetDataMap()
 	keys := make([]string, 0, len(dataMap))
 	for key := range dataMap {
 		keys = append(keys, key)
@@ -100,11 +99,11 @@ func list() {
 	}
 }
 
-func get(name string) []byte {
+func get(store util.Store, name string) []byte {
 
-	dataMap := getDataMap()
+	dataMap := store.GetDataMap()
 	dataValue := dataMap[name]
-	checkState(len(dataValue) > 0, "name not found")
+	util.CheckState(len(dataValue) > 0, "name not found")
 
 	hash := sha256.New()
 	hash.Write([]byte(util.ReadPassword()))
@@ -117,131 +116,26 @@ func get(name string) []byte {
 			fmt.Fprintln(os.Stderr, "Could not decrypt, check password")
 			return nil
 		default:
-			checkError(err)
+			util.CheckError(err)
 		}
 	}
 
 	return value
 }
 
-func set(setterArgs []string) {
+func set(store util.Store, setterArgs []string) {
 
 	hash := sha256.New()
 	hash.Write([]byte(util.ReadPassword()))
 	key := hash.Sum(nil)
 
-	dataMap := getDataMap()
+	dataMap := store.GetDataMap()
 
 	value, err := crypt.Encrypt(key, []byte(setterArgs[1]))
-	checkError(err)
+	util.CheckError(err)
 
 	dataMap[setterArgs[0]] = value
 
-	err = setDataMap(dataMap)
-	checkError(err)
-}
-
-func getDataMap() (map[string][]byte) {
-
-	dataMap := make(map[string][]byte)
-
-	// open input file
-	if fi, err := os.Open(storeName); err == nil {
-
-		// close fi on exit and check for its returned error
-		defer func() {
-			if err := fi.Close(); err != nil {
-				panic(err)
-			}
-		}()
-
-		// make a read buffer
-		r := bufio.NewReader(fi)
-
-		for true {
-			// read key
-			keyLength := new(uint32)
-			err = binary.Read(r, binary.LittleEndian, keyLength)
-			if err == io.EOF {
-				return dataMap
-			}
-			checkError(err)
-
-			keyLengthInt := int(*keyLength)
-			checkState(keyLengthInt > 0, "key length may not be negative")
-
-			keyNameBytes := make([]byte, keyLengthInt)
-			err = binary.Read(r, binary.LittleEndian, keyNameBytes)
-			checkError(err)
-
-			keyName := string(keyNameBytes)
-
-			// read value
-			valueLength := new(uint32)
-			err = binary.Read(r, binary.LittleEndian, valueLength)
-			checkError(err)
-
-			valueLengthInt := int(*valueLength)
-			checkState(valueLengthInt > 0, "value Length may not be negative")
-
-			valueBytes := make([]byte, valueLengthInt)
-			err = binary.Read(r, binary.LittleEndian, valueBytes)
-			checkError(err)
-
-			dataMap[keyName] = valueBytes
-		}
-	}
-
-	return dataMap
-}
-
-func setDataMap(dataMap map[string][]byte) error {
-
-	// open output file
-	if fo, err := os.Create(storeName); err == nil {
-
-		// close fo on exit and check for its returned error
-		defer func() {
-			if err := fo.Close(); err != nil {
-				panic(err)
-			}
-		}()
-
-		// make a write buffer
-		w := bufio.NewWriter(fo)
-
-		for k, v := range dataMap {
-
-			kLen := len(k)
-			err = binary.Write(w, binary.LittleEndian, uint32(kLen))
-			checkError(err)
-
-			err = binary.Write(w, binary.LittleEndian, []byte(k))
-			checkError(err)
-
-			vLen := len(v)
-			err = binary.Write(w, binary.LittleEndian, uint32(vLen))
-			checkError(err)
-
-			err = binary.Write(w, binary.LittleEndian, []byte(v))
-			checkError(err)
-
-			w.Flush()
-		}
-	}
-	return nil
-}
-
-func checkState(expression bool, message string) {
-	if !expression {
-		os.Stderr.Write([]byte("\033[1;31m" + message + "\033[0m\n"))
-		os.Exit(1)
-	}
-}
-
-func checkError(err error) {
-	if err != nil {
-		os.Stderr.Write([]byte("\033[1;31m" + err.Error() + "\033[0m\n"))
-		os.Exit(1)
-	}
+	err = store.SetDataMap(dataMap)
+	util.CheckError(err)
 }
