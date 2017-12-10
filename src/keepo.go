@@ -22,22 +22,22 @@ func main() {
 	store := io.Store{Path:dir}
 
 	arguments := os.Args[1:]
-	show, copy := parameterSearch(arguments)
+	show, clip := parameterSearch(arguments)
 	command := commandSearch(arguments)
-	processCommand(store, command, show, copy)
+	processCommand(store, command, show, clip)
 }
 
-func parameterSearch(parameters []string) (show bool, copy bool) {
-	show, copy = false, false
+func parameterSearch(parameters []string) (show bool, clip bool) {
+	show, clip = false, false
 	for index := 0; index < len(parameters); index++ {
 		switch parameters[index] {
 		case "-s", "--show":
 			show = true
 		case "-c", "--copy":
-			copy = true
+			clip = true
 		}
 	}
-	return show, copy
+	return show, clip
 }
 
 func commandSearch(parameters []string) (command []string) {
@@ -50,7 +50,7 @@ func commandSearch(parameters []string) (command []string) {
 	return nil
 }
 
-func processCommand(store io.Store, command []string, show bool, copy bool) {
+func processCommand(store io.Store, command []string, show bool, clip bool) {
 	if command == nil {
 		printUsage()
 		os.Exit(1)
@@ -66,12 +66,12 @@ func processCommand(store io.Store, command []string, show bool, copy bool) {
 			value := get(store, name)
 			util.CheckState(value != nil, fmt.Sprintf("Expected name '%s' to have a value", name))
 
-			if copy {
+			if clip {
 				err := io.CopyToClipboard(value)
 				util.CheckError(err)
 			}
 
-			if show || !copy {
+			if show || !clip {
 				fmt.Printf("%s\n", value)
 			}
 
