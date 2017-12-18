@@ -10,15 +10,17 @@ import (
 	"encoding/base64"
 	"sort"
 	"math/rand"
-	"path"
 	"time"
 	"strconv"
+	"path/filepath"
 )
 
 const version = 1.0
 
 func main() {
-	dir := path.Dir(os.Args[0])
+	executable, err := os.Executable()
+	util.CheckError(err)
+	dir := filepath.Dir(executable)
 	store := io.Store{Path:dir}
 
 	arguments := os.Args[1:]
