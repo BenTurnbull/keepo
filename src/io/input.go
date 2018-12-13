@@ -1,11 +1,11 @@
 package io
 
 import (
-	"syscall"
 	"bufio"
+	"fmt"
 	"os"
 	"strings"
-	"fmt"
+	"syscall"
 )
 
 // Use stty to disable echoing.

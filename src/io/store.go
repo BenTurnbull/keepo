@@ -3,10 +3,10 @@ package io
 import (
 	"bufio"
 	"encoding/binary"
-	"os"
 	"io"
+	"keepo/src/util"
+	"os"
 	"path/filepath"
-	"../util"
 )
 
 const storeName = "keepo.dat"

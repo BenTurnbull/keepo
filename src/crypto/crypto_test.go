@@ -1,8 +1,8 @@
 package crypto
 
 import (
-	"testing"
 	"fmt"
+	"testing"
 )
 
 func TestCrypto(t *testing.T) {

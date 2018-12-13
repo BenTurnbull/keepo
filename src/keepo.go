@@ -1,18 +1,18 @@
 package main
 
 import (
-	"os"
-	"fmt"
 	"crypto/sha256"
-	"./crypto"
-	"./util"
-	"./io"
 	"encoding/base64"
-	"sort"
+	"fmt"
+	"keepo/src/crypto"
+	"keepo/src/io"
+	"keepo/src/util"
 	"math/rand"
-	"time"
-	"strconv"
+	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
+	"time"
 )
 
 const version = 1.0
