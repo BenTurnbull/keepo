@@ -16,14 +16,14 @@ func TestCrypto(t *testing.T) {
 
 	key := []byte("AES256Key-32Characters1234567890")
 	for _, c := range cases {
-		value, err := Encrypt(key, c.in)
+		value, err := EncryptCFB(key, c.in)
 		if err != nil {
 			t.Errorf("Tried to encrypt but failed with %q", err)
 		}
 
 		fmt.Printf("Received encrypted value %q \n", value)
 
-		got, err := Decrypt(key, value)
+		got, err := DecryptCFB(key, value)
 		if err != nil {
 			t.Errorf("Tried to decrypt but failed with %q", err)
 		}

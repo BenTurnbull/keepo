@@ -4,13 +4,13 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"fmt"
-	"keepo/src/crypto"
-	"keepo/src/io"
+	"keepo/src/data/input"
+	"keepo/src/data/output"
+	"keepo/src/data/store"
 	"keepo/src/util"
 	"math/rand"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"time"
 )
@@ -19,14 +19,13 @@ const version = 1.0
 
 func main() {
 	executable, err := os.Executable()
-	util.CheckError(err)
+	util.CheckError(err, "could not get executable path")
 	dir := filepath.Dir(executable)
-	store := io.Store{Path:dir}
 
 	arguments := os.Args[1:]
 	show, clip := parameterSearch(arguments)
 	command := commandSearch(arguments)
-	processCommand(store, command, show, clip)
+	processCommand(dir, command, show, clip)
 }
 
 func parameterSearch(parameters []string) (show bool, clip bool) {
@@ -45,32 +44,35 @@ func parameterSearch(parameters []string) (show bool, clip bool) {
 func commandSearch(parameters []string) (command []string) {
 	for index := 0; index < len(parameters); index++ {
 		switch parameters[index] {
-		case "list", "get", "set":
+		case "convert", "list", "get", "set":
 			return parameters[index:]
 		}
 	}
 	return nil
 }
 
-func processCommand(store io.Store, command []string, show bool, clip bool) {
+func processCommand(path string, command []string, show bool, clip bool) {
 	if command == nil {
 		printUsage()
 		os.Exit(1)
 	} else {
 
 		switch command[0] {
+		/*case "convert":
+			convert(store, getName(command))*/
+
 		case "list":
-			list(store)
+			list(path)
 
 		case "get":
 			name := getName(command)
 
-			value := get(store, name)
+			value := get(path, name)
 			util.CheckState(value != nil, fmt.Sprintf("Expected name '%s' to have a value", name))
 
 			if clip {
-				err := io.CopyToClipboard(value)
-				util.CheckError(err)
+				err := output.CopyToClipboard(value)
+				util.CheckError(err, "could not copy to clipboard")
 			}
 
 			if show || !clip {
@@ -80,7 +82,7 @@ func processCommand(store io.Store, command []string, show bool, clip bool) {
 		case "set":
 			name := getName(command)
 			value := getValue(command)
-			set(store, name, value)
+			set(path, name, value)
 
 		default:
 			printUsage()
@@ -134,53 +136,58 @@ func getRandomValue() string {
 	return string(base64.RawURLEncoding.EncodeToString(hash.Sum(nil))[:8])
 }
 
-func list(store io.Store) {
-	dataMap := store.GetDataMap()
-	keys := make([]string, 0, len(dataMap))
-	for key := range dataMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	for _, v := range keys {
+func list(path string) {
+	for _, v := range store.GetMapKeysV1(path) {
 		fmt.Println(v)
 	}
 }
 
-func get(store io.Store, name string) []byte {
-	dataMap := store.GetDataMap()
-	dataValue := dataMap[name]
-	util.CheckState(len(dataValue) > 0, "name not found")
-
-	hash := sha256.New()
-	hash.Write([]byte(io.ReadPassword()))
-	key := hash.Sum(nil)
-
-	value, err := crypto.Decrypt(key, dataValue)
+func get(path, name string) []byte {
+	value, err := store.GetMapValueV1(path, name, input.ReadPassword())
 	if err != nil {
 		switch err.(type) {
 		case base64.CorruptInputError: // not ideal, need to use authenticated encryption
-			fmt.Fprintln(os.Stderr, "Could not decrypt, check password")
+			_, _ = fmt.Fprintln(os.Stderr, "Could not decrypt, check password")
 			return nil
 		default:
-			util.CheckError(err)
+			util.CheckError(err, "could not decrypt value")
 		}
 	}
 
 	return value
 }
 
-func set(store io.Store, name string, value string) {
-	hash := sha256.New()
-	hash.Write([]byte(io.ReadPassword()))
-	key := hash.Sum(nil)
-
-	dataMap := store.GetDataMap()
-
-	encrypted, err := crypto.Encrypt(key, []byte(value))
-	util.CheckError(err)
-
-	dataMap[name] = encrypted
-
-	err = store.SetDataMap(dataMap)
-	util.CheckError(err)
+func set(path, name string, value string) {
+	err := store.SetMapValueV1(path, name, value, input.ReadPassword())
+	util.CheckError(err, "could not save store")
 }
+
+/*func convert(store store.StorePath, existingKey string) {
+	dataMap := store.GetDataMapV1()
+	convertedDataMap := make(map[string][]byte)
+	key := crypto.GetHash([]byte(existingKey))
+
+	for k, v := range dataMap {
+		value, err := crypto.DecryptCFB(key[:], v)
+		util.CheckError(err, "could not decrypt store value")
+		convertedDataMap[k] = value
+	}
+
+	fixedKey := crypto.GenerateKey()
+	log.Printf("fixed key %s", hex.EncodeToString(fixedKey[:]))
+
+	var nonce [crypto.NonceSize]byte
+	for k, v := range dataMap {
+		nonce = crypto.GenerateNonce()
+		out := make([]byte, len(nonce))
+		copy(out, nonce[:])
+
+		out = secretbox.Seal(out, v, &nonce, &fixedKey)
+		convertedDataMap[k] = out
+	}
+
+	nonce = crypto.GenerateNonce()
+	out := secretbox.Seal(nonce[:], fixedKey[:], &nonce, &key)
+	err := store.SetV2(out, convertedDataMap)
+	util.CheckError(err, "could not save converted store")
+}*/

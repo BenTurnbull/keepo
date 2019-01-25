@@ -4,12 +4,41 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"errors"
 	"io"
+	"keepo/src/util"
 )
 
-func Encrypt(key, text []byte) ([]byte, error) {
+const(
+	HashSize = 32
+	KeySize = 32
+	NonceSize = 24
+)
+
+func GenerateKey() (key [KeySize]byte) {
+	_, err := io.ReadFull(rand.Reader, key[:])
+	util.CheckError(err, "could not generate key")
+	return key
+}
+
+func GenerateNonce() (nonce [NonceSize]byte) {
+	_, err := io.ReadFull(rand.Reader, nonce[:])
+	util.CheckError(err, "could not generate nonce")
+	return nonce
+}
+
+func GetHash(content []byte) (hash [HashSize]byte) {
+	sha256Function := sha256.New()
+	sha256Function.Write(content)
+	hashBytes := sha256Function.Sum(nil)
+	util.CheckState(len(hashBytes) == HashSize, "hash output was not hash length")
+	copy(hash[:], hashBytes)
+	return hash
+}
+
+func EncryptCFB(key, text []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
@@ -29,7 +58,7 @@ func Encrypt(key, text []byte) ([]byte, error) {
 	return cipherText, nil
 }
 
-func Decrypt(key, text []byte) ([]byte, error) {
+func DecryptCFB(key, text []byte) ([]byte, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err

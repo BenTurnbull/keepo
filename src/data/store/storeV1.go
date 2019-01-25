@@ -1,4 +1,4 @@
-package io
+package store
 
 import (
 	"bufio"
@@ -6,26 +6,14 @@ import (
 	"io"
 	"keepo/src/util"
 	"os"
-	"path/filepath"
 )
 
-const storeName = "keepo.dat"
-
-type Store struct {
-	Path string
-}
-
-func getStorePath(store Store) string {
-	return store.Path + string(filepath.Separator) + storeName
-}
-
-func (store Store) GetDataMap() (map[string][]byte) {
+func getV1(path string) map[string][]byte {
 
 	dataMap := make(map[string][]byte)
 
 	// open input file
-	storePath := getStorePath(store)
-	if fi, err := os.Open(storePath); err == nil {
+	if fi, err := os.Open(path); err == nil {
 
 		// close fi on exit and check for its returned error
 		defer func() {
@@ -42,30 +30,26 @@ func (store Store) GetDataMap() (map[string][]byte) {
 			keyLength := new(uint32)
 			err = binary.Read(r, binary.LittleEndian, keyLength)
 			if err == io.EOF {
-				return dataMap
+				break
 			}
-			util.CheckError(err)
-
-			keyLengthInt := int(*keyLength)
-			util.CheckState(keyLengthInt > 0, "key length may not be negative")
+			util.CheckError(err, "could not read key length")
+			keyLengthInt := uint32(*keyLength)
 
 			keyNameBytes := make([]byte, keyLengthInt)
 			err = binary.Read(r, binary.LittleEndian, keyNameBytes)
-			util.CheckError(err)
+			util.CheckError(err, "could not read key")
 
 			keyName := string(keyNameBytes)
 
 			// read value
 			valueLength := new(uint32)
 			err = binary.Read(r, binary.LittleEndian, valueLength)
-			util.CheckError(err)
-
-			valueLengthInt := int(*valueLength)
-			util.CheckState(valueLengthInt > 0, "value Length may not be negative")
+			util.CheckError(err, "could not read value length")
+			valueLengthInt := uint32(*valueLength)
 
 			valueBytes := make([]byte, valueLengthInt)
 			err = binary.Read(r, binary.LittleEndian, valueBytes)
-			util.CheckError(err)
+			util.CheckError(err, "could not read value")
 
 			dataMap[keyName] = valueBytes
 		}
@@ -74,11 +58,10 @@ func (store Store) GetDataMap() (map[string][]byte) {
 	return dataMap
 }
 
-func (store Store) SetDataMap(dataMap map[string][]byte) error {
+func setV1(path string, dataMap map[string][]byte) error {
 
 	// open output file
-	storePath := getStorePath(store)
-	if fo, err := os.Create(storePath); err == nil {
+	if fo, err := os.Create(path); err == nil {
 
 		// close fo on exit and check for its returned error
 		defer func() {
@@ -94,19 +77,20 @@ func (store Store) SetDataMap(dataMap map[string][]byte) error {
 
 			kLen := len(k)
 			err = binary.Write(w, binary.LittleEndian, uint32(kLen))
-			util.CheckError(err)
+			util.CheckError(err, "could not write key length")
 
 			err = binary.Write(w, binary.LittleEndian, []byte(k))
-			util.CheckError(err)
+			util.CheckError(err, "could not write key")
 
 			vLen := len(v)
 			err = binary.Write(w, binary.LittleEndian, uint32(vLen))
-			util.CheckError(err)
+			util.CheckError(err, "could not write value length")
 
 			err = binary.Write(w, binary.LittleEndian, []byte(v))
-			util.CheckError(err)
+			util.CheckError(err, "could not write value")
 
-			w.Flush()
+			err = w.Flush()
+			util.CheckError(err, "could not flush writes")
 		}
 
 	} else {
@@ -115,6 +99,3 @@ func (store Store) SetDataMap(dataMap map[string][]byte) error {
 
 	return nil
 }
-
-
-

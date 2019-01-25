@@ -9,9 +9,9 @@ func CheckState(expression bool, message string) {
 	}
 }
 
-func CheckError(err error) {
+func CheckError(err error, message string) {
 	if err != nil {
-		os.Stderr.Write([]byte("\033[1;31m" + err.Error() + "\033[0m\n"))
+		os.Stderr.Write([]byte("\033[1;31m" + message + " (" +err.Error() + ")\033[0m\n"))
 		os.Exit(1)
 	}
 }
