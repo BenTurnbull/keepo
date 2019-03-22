@@ -58,8 +58,8 @@ func processCommand(path string, command []string, show bool, clip bool) {
 	} else {
 
 		switch command[0] {
-		/*case "convert":
-			convert(store, getName(command))*/
+		case "convert":
+			convert(path, getName(command))
 
 		case "list":
 			list(path)
@@ -68,7 +68,7 @@ func processCommand(path string, command []string, show bool, clip bool) {
 			name := getName(command)
 
 			value := get(path, name)
-			util.CheckState(value != nil, fmt.Sprintf("Expected name '%s' to have a value", name))
+			util.CheckState(value != nil, fmt.Sprintf("expected name '%s' to have a value", name))
 
 			if clip {
 				err := output.CopyToClipboard(value)
@@ -147,7 +147,7 @@ func get(path, name string) []byte {
 	if err != nil {
 		switch err.(type) {
 		case base64.CorruptInputError: // not ideal, need to use authenticated encryption
-			_, _ = fmt.Fprintln(os.Stderr, "Could not decrypt, check password")
+			_, _ = fmt.Fprintln(os.Stderr, "could not decrypt, check password")
 			return nil
 		default:
 			util.CheckError(err, "could not decrypt value")
@@ -162,32 +162,13 @@ func set(path, name string, value string) {
 	util.CheckError(err, "could not save store")
 }
 
-/*func convert(store store.StorePath, existingKey string) {
-	dataMap := store.GetDataMapV1()
-	convertedDataMap := make(map[string][]byte)
-	key := crypto.GetHash([]byte(existingKey))
+func convert(path string, existingSecret string) {
+	store.Convert(path, existingSecret, "")
 
-	for k, v := range dataMap {
-		value, err := crypto.DecryptCFB(key[:], v)
-		util.CheckError(err, "could not decrypt store value")
-		convertedDataMap[k] = value
-	}
 
-	fixedKey := crypto.GenerateKey()
-	log.Printf("fixed key %s", hex.EncodeToString(fixedKey[:]))
 
-	var nonce [crypto.NonceSize]byte
-	for k, v := range dataMap {
-		nonce = crypto.GenerateNonce()
-		out := make([]byte, len(nonce))
-		copy(out, nonce[:])
-
-		out = secretbox.Seal(out, v, &nonce, &fixedKey)
-		convertedDataMap[k] = out
-	}
-
-	nonce = crypto.GenerateNonce()
-	out := secretbox.Seal(nonce[:], fixedKey[:], &nonce, &key)
-	err := store.SetV2(out, convertedDataMap)
-	util.CheckError(err, "could not save converted store")
-}*/
+	/*nonce = crypto.GenerateNonce()
+	out := secretbox.Seal(nonce[:], fixedSecretKey[:], &nonce, &key)
+	err := store.SetV2(out, keyValueMap)
+	util.CheckError(err, "could not save converted store")*/
+}

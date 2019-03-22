@@ -58,7 +58,7 @@ func getV1(path string) map[string][]byte {
 	return dataMap
 }
 
-func setV1(path string, dataMap map[string][]byte) error {
+func setV1(path string, dataMap map[string][]byte) (err error) {
 
 	// open output file
 	if fo, err := os.Create(path); err == nil {

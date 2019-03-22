@@ -12,14 +12,14 @@ import (
 )
 
 const(
-	HashSize = 32
-	KeySize = 32
-	NonceSize = 24
+	HashSize   = 32
+	SecretSize = 32
+	NonceSize  = 24
 )
 
-func GenerateKey() (key [KeySize]byte) {
+func GenerateSecret() (key [SecretSize]byte) {
 	_, err := io.ReadFull(rand.Reader, key[:])
-	util.CheckError(err, "could not generate key")
+	util.CheckError(err, "could not generate secret")
 	return key
 }
 
