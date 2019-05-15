@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/binary"
-	"keepo/src/util"
 	"os"
 )
 
@@ -46,30 +45,46 @@ func getIndex(path string) (sealedSecret []byte, dataIndex map[string]uint64, er
 
 		// read the secret
 		_, err := fi.Read(uint32Bytes)
-		util.CheckError(err, "could not read secret length")
+		if err != nil {
+			return nil, nil, InvalidFormatError("could not read secret length")
+		}
+
 		secretLength := binary.LittleEndian.Uint32(uint32Bytes)
 		sealedSecret = make([]byte, secretLength)
 		_, err = fi.Read(sealedSecret)
-		util.CheckError(err, "could not read secret")
+		if err != nil {
+			return nil, nil, InvalidFormatError("could not read secret")
+		}
 
 		// read the index
 		_, err = fi.Read(uint32Bytes)
-		util.CheckError(err, "could not read index count")
+		if err != nil {
+			return nil, nil, InvalidFormatError("could not read index count")
+		}
+
 		indexCount := int(binary.LittleEndian.Uint32(uint32Bytes))
 		dataIndex = make(map[string]uint64, indexCount)
 
 		// read index entries
 		for i := 0; i < indexCount; i++ {
 			_, err = fi.Read(uint32Bytes)
-			util.CheckError(err, "could not read index key length")
+			if err != nil {
+				return sealedSecret, dataIndex, InvalidFormatError("could not read an index key length")
+			}
+
 			keyLength := int(binary.LittleEndian.Uint32(uint32Bytes))
 
 			keyBytes := make([]byte, keyLength)
 			_, err = fi.Read(keyBytes)
-			util.CheckError(err, "could not read index key")
+			if err != nil {
+				return sealedSecret, dataIndex, InvalidFormatError("could not read an index key")
+			}
 
 			_, err = fi.Read(uint64Bytes)
-			util.CheckError(err, "could not read index data offset")
+			if err != nil {
+				return sealedSecret, dataIndex, InvalidFormatError("could not read an index data offset")
+			}
+
 			dataOffset := binary.LittleEndian.Uint64(uint64Bytes)
 			dataIndex[string(keyBytes)] = dataOffset
 		}
@@ -95,15 +110,21 @@ func getData(path string, dataOffset uint64) (data []byte, err error) {
 		uint32Bytes := make([]byte, 4)
 
 		_, err := fi.Seek(int64(dataOffset), 0)
-		util.CheckError(err, "could not seek to data offset")
+		if err != nil {
+			return nil, InvalidFormatError("could not seek to data offset")
+		}
 
 		_, err = fi.Read(uint32Bytes)
-		util.CheckError(err, "could not read data length")
+		if err != nil {
+			return nil, InvalidFormatError("could not read data length")
+		}
 		dataLength := int(binary.LittleEndian.Uint32(uint32Bytes))
 
 		data := make([]byte, dataLength)
 		_, err = fi.Read(data)
-		util.CheckError(err, "could not read data")
+		if err != nil {
+			return nil, InvalidFormatError("could not read data")
+		}
 
 		return data, nil
 	} else {
@@ -129,16 +150,22 @@ func set(path string, sealedSecret []byte, dataMap map[string][]byte) (err error
 		// write the sealedSecret
 		binary.LittleEndian.PutUint32(uint32Bytes, uint32(len(sealedSecret)))
 		_, err = fo.Write(uint32Bytes)
-		util.CheckError(err, "could not write secret length")
+		if err != nil {
+			return InvalidFormatError("could not write secret length")
+		}
 
 		_, err = fo.Write(sealedSecret)
-		util.CheckError(err, "could not write secret")
+		if err != nil {
+			return InvalidFormatError("could not write secret")
+		}
 
 		// write the header count
 		entryCount := uint32(len(dataMap))
 		binary.LittleEndian.PutUint32(uint32Bytes, entryCount)
 		_, err = fo.Write(uint32Bytes)
-		util.CheckError(err, "could not write key count")
+		if err != nil {
+			return InvalidFormatError("could not write key count")
+		}
 
 		// write the header
 		headerMap := make(map[string]uint64, 0)
@@ -146,18 +173,27 @@ func set(path string, sealedSecret []byte, dataMap map[string][]byte) (err error
 
 			binary.LittleEndian.PutUint32(uint32Bytes, uint32(len(k)))
 			_, err = fo.Write(uint32Bytes)
-			util.CheckError(err, "could not write header entry length for: " + k)
+			if err != nil {
+				return InvalidFormatError("could not write header entry length for: " + k)
+			}
 
 			_, err = fo.Write([]byte(k))
-			util.CheckError(err, "could not write header entry for: " + k)
+			if err != nil {
+				return InvalidFormatError("could not write header entry for: " + k)
+			}
 
 			currentPosition, err := fo.Seek(0, 1)
-			util.CheckError(err, "could not get current position of file")
+			if err != nil {
+				return InvalidFormatError("could not get current position of file")
+			}
+
 			headerMap[k] = uint64(currentPosition)
 
 			binary.LittleEndian.PutUint64(uint64Bytes, uint64(0))
 			_, err = fo.Write(uint64Bytes)
-			util.CheckError(err, "could not write value position placeholder")
+			if err != nil {
+				return InvalidFormatError("could not write value position placeholder")
+			}
 		}
 
 		// write the data and update the header value offsets
@@ -165,20 +201,30 @@ func set(path string, sealedSecret []byte, dataMap map[string][]byte) (err error
 
 			// track current value position
 			currentPosition, err := fo.Seek(0, 1)
-			util.CheckError(err, "could not get current position of file")
+			if err != nil {
+				return InvalidFormatError("could not get current position of file")
+			}
+
 			_, err = fo.Seek(int64(headerMap[k]), 0)
 			binary.LittleEndian.PutUint64(uint64Bytes, uint64(currentPosition))
 			_, err = fo.Write(uint64Bytes)
-			util.CheckError(err, "could not write value position")
+			if err != nil {
+				return InvalidFormatError("could not write value position")
+			}
+
 			_, err = fo.Seek(currentPosition, 0)
 
 			// write the value
 			binary.LittleEndian.PutUint32(uint32Bytes, uint32(len(v)))
 			_, err = fo.Write(uint32Bytes)
-			util.CheckError(err, "could not write entry length for value of: " + k)
+			if err != nil {
+				return InvalidFormatError("could not write entry length for value of: " + k)
+			}
 
 			_, err = fo.Write(v)
-			util.CheckError(err, "could not write entry value for: " + k)
+			if err != nil {
+				return InvalidFormatError("could not write entry value for: " + k)
+			}
 		}
 
 		return nil

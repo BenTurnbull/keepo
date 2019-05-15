@@ -1,8 +1,6 @@
 package store
 
 import (
-	"encoding/hex"
-	"fmt"
 	"golang.org/x/crypto/nacl/secretbox"
 	"io"
 	"keepo/src/crypto"
@@ -16,105 +14,8 @@ import (
 
 const storeName = "keepo.dat"
 
-type State struct {
-	code int
-	message string
-}
-
-var AuthenticationFailedState = &State{10, "authentication failed"}
-var ValueAbsentState = &State{11, "value absent"}
-
-func (e *State) Error() string {
-	return fmt.Sprintf("%s", e.message)
-}
-
 func GetStorePath(path string) string {
 	return path + string(filepath.Separator) + storeName
-}
-
-func GetMapKeysV1(path string) (keys []string) {
-	storePath := GetStorePath(path)
-	dataMap := getV1(storePath)
-	keys = make([]string, 0, len(dataMap))
-	for key := range dataMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-func GetMapValueV1(path, dataKey, password string) (value []byte, err error) {
-	storePath := GetStorePath(path)
-	dataMap := getV1(storePath)
-
-	dataBytes := dataMap[dataKey]
-	util.CheckState(len(dataBytes) > 0, "name not found")
-
-	passwordHash := crypto.GetHash([]byte(password))
-	return crypto.DecryptCFB(passwordHash[:], dataBytes)
-}
-
-func SetMapValueV1(path, dataKey, dataValue, password string) (err error) {
-	storePath := GetStorePath(path)
-	dataMap := getV1(storePath)
-
-	passwordHash := crypto.GetHash([]byte(password))
-	dataBytes, err := crypto.EncryptCFB(passwordHash[:], []byte(dataValue))
-	util.CheckError(err, "could not encrypt data value")
-	dataMap[dataKey] = dataBytes
-
-	return setV1(storePath, dataMap)
-}
-
-func Convert(path, existingSecret, newSecret string) {
-	keyMap := GetMapKeysV1(path)
-	keyValueMap := make(map[string][]byte)
-
-	for _, v := range keyMap {
-		value, err := GetMapValueV1(path, v, existingSecret)
-		util.CheckError(err, "could not get data value")
-		keyValueMap[v] = value
-	}
-
-	for k, v := range keyValueMap {
-		log.Printf("%s - %s", k, v)
-	}
-
-	fixedSecret := crypto.GenerateSecret()
-	fixedSecret = crypto.GetHash(fixedSecret[:])
-	log.Printf("fixed key hash %s", hex.EncodeToString(fixedSecret[:]))
-
-	var nonce [crypto.NonceSize]byte
-	for k, v := range keyValueMap {
-		nonce = crypto.GenerateNonce()
-		out := secretbox.Seal(nonce[:], v, &nonce, &fixedSecret)
-		keyValueMap[k] = out
-	}
-
-	log.Println("encrypted values")
-	for k, v := range keyValueMap {
-		log.Printf("%s - %s", k, hex.EncodeToString(v))
-	}
-
-	log.Println("decrypted values")
-	for k, v := range keyValueMap {
-
-		copy(nonce[:], v[:crypto.NonceSize])
-		out, ok := secretbox.Open(nil, v[crypto.NonceSize:], &nonce, &fixedSecret)
-		if !ok {
-			log.Println("could not decrypt message")
-		} else {
-			log.Printf("%s - %s", k, string(out))
-		}
-	}
-
-	nonce = crypto.GenerateNonce()
-	newHashedSecret := crypto.GetHash([]byte(newSecret))
-	sealedSecret := secretbox.Seal(nonce[:], fixedSecret[:], &nonce, &newHashedSecret)
-
-	convertedPath := GetStorePath(path) + ".upgrade"
-	err := set(convertedPath, sealedSecret[:], keyValueMap)
-	util.CheckError(err, "could not write converted data")
 }
 
 func GetMapKeys(path string) (keys []string) {
@@ -277,3 +178,55 @@ func sealData(data []byte, secret [crypto.SecretSize]byte) (sealedData []byte){
 	var nonce = crypto.GenerateNonce()
 	return secretbox.Seal(nonce[:], data, &nonce, &secret)
 }
+
+/* // conversion code for v1
+func Convert(path, secret string) {
+	keyMap := GetMapKeysV1(path)
+	keyValueMap := make(map[string][]byte)
+
+	for _, v := range keyMap {
+		value, err := GetMapValueV1(path, v, secret)
+		util.CheckError(err, "could not get data value")
+		keyValueMap[v] = value
+	}
+
+	for k, v := range keyValueMap {
+		log.Printf("%s - %s", k, v)
+	}
+
+	fixedSecret := crypto.GenerateSecret()
+	fixedSecret = crypto.GetHash(fixedSecret[:])
+	log.Printf("fixed key hash %s", hex.EncodeToString(fixedSecret[:]))
+
+	var nonce [crypto.NonceSize]byte
+	for k, v := range keyValueMap {
+		nonce = crypto.GenerateNonce()
+		out := secretbox.Seal(nonce[:], v, &nonce, &fixedSecret)
+		keyValueMap[k] = out
+	}
+
+	log.Println("encrypted values")
+	for k, v := range keyValueMap {
+		log.Printf("%s - %s", k, hex.EncodeToString(v))
+	}
+
+	log.Println("decrypted values")
+	for k, v := range keyValueMap {
+
+		copy(nonce[:], v[:crypto.NonceSize])
+		out, ok := secretbox.Open(nil, v[crypto.NonceSize:], &nonce, &fixedSecret)
+		if !ok {
+			log.Println("could not decrypt message")
+		} else {
+			log.Printf("%s - %s", k, string(out))
+		}
+	}
+
+	nonce = crypto.GenerateNonce()
+	newHashedSecret := crypto.GetHash([]byte(secret))
+	sealedSecret := secretbox.Seal(nonce[:], fixedSecret[:], &nonce, &newHashedSecret)
+
+	convertedPath := GetStorePath(path) + ".upgrade"
+	err := set(convertedPath, sealedSecret[:], keyValueMap)
+	util.CheckError(err, "could not write converted data")
+}*/

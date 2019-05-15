@@ -15,7 +15,7 @@ import (
 	"time"
 )
 
-const version = 1.0
+const version = 1.1
 
 func main() {
 	executable, err := os.Executable()
@@ -44,7 +44,7 @@ func parameterSearch(parameters []string) (show bool, clip bool) {
 func commandSearch(parameters []string) (command []string) {
 	for index := 0; index < len(parameters); index++ {
 		switch parameters[index] {
-		case "convert", "list", "get", "set":
+		case "status", "list", "get", "set", "clear":
 			return parameters[index:]
 		}
 	}
@@ -54,12 +54,11 @@ func commandSearch(parameters []string) (command []string) {
 func processCommand(path string, command []string, show bool, clip bool) {
 	if command == nil {
 		printUsage()
-		os.Exit(1)
+		os.Exit(0)
 	} else {
 
-		switch command[0] {
-		case "convert":
-			convert(path, getName(command))
+		commandWord := command[0]
+		switch commandWord {
 
 		case "list":
 			list(path)
@@ -84,10 +83,33 @@ func processCommand(path string, command []string, show bool, clip bool) {
 			value := getValue(command)
 			set(path, name, value)
 
+		case "clear":
+			name := getName(command)
+			clear(path, name)
+
+		case "status":
+			printStatus(path)
+
 		default:
+			fmt.Printf("unknown command '%s'\n", commandWord)
 			printUsage()
 			os.Exit(1)
 		}
+	}
+}
+
+func printStatus(path string) {
+	boldOpen := "\033[1m"
+	boldClose := "\033[0m"
+	fmt.Println("\nstatus: " + boldOpen +  getStoreInfo(path) + boldClose + "\n")
+}
+
+func getStoreInfo(path string) string {
+	storePath := store.GetStorePath(path)
+	if fi, err := os.Stat(storePath); err == nil {
+		return fmt.Sprintf("%s (%d bytes)", storePath, fi.Size())
+	} else {
+		return "store empty"
 	}
 }
 
@@ -95,14 +117,18 @@ func printUsage() {
 	boldOpen := "\033[1m"
 	boldClose := "\033[0m"
 	fmt.Println(
-		"version: " + strconv.FormatFloat(version, 'f', 1, 64) +
+		"version: " + boldOpen +  strconv.FormatFloat(version, 'f', 1, 64) + boldClose +
 		"\n\n" +
 		"usage: " + boldOpen + "keepo [options] <command>" + boldClose +
 		"\n\n" +
 		"commands:\n" +
+		"\t" + boldOpen + "status" + boldClose + "\t\t\t\t" + "prints status" +
+		"\n\n" +
 		"\t" + boldOpen + "set <name> [value]" + boldClose + "\t\t" + "sets a name and its value (omit for random value)" +
 		"\n\n" +
 		"\t" + boldOpen + "get <name>" + boldClose + "\t\t\t" + "gets the value for a name" +
+		"\n\n" +
+		"\t" + boldOpen + "clear <name>" + boldClose + "\t\t\t" + "clears the name/value" +
 		"\n\n" +
 		"\toptions:\n" +
 		"\t\t" + boldOpen + "-s, --show" + boldClose + "\t\tsend output to stdout\n" +
@@ -137,13 +163,13 @@ func getRandomValue() string {
 }
 
 func list(path string) {
-	for _, v := range store.GetMapKeysV1(path) {
+	for _, v := range store.GetMapKeys(path) {
 		fmt.Println(v)
 	}
 }
 
 func get(path, name string) []byte {
-	value, err := store.GetMapValueV1(path, name, input.ReadPassword())
+	value, err := store.GetMapValue(path, name, input.ReadPassword())
 	if err != nil {
 		switch err.(type) {
 		case base64.CorruptInputError: // not ideal, need to use authenticated encryption
@@ -158,17 +184,11 @@ func get(path, name string) []byte {
 }
 
 func set(path, name string, value string) {
-	err := store.SetMapValueV1(path, name, value, input.ReadPassword())
+	err := store.SetMapValue(path, name, value, input.ReadPassword())
 	util.CheckError(err, "could not save store")
 }
 
-func convert(path string, existingSecret string) {
-	store.Convert(path, existingSecret, "")
-
-
-
-	/*nonce = crypto.GenerateNonce()
-	out := secretbox.Seal(nonce[:], fixedSecretKey[:], &nonce, &key)
-	err := store.SetV2(out, keyValueMap)
-	util.CheckError(err, "could not save converted store")*/
+func clear(path, name string) {
+	err := store.ClearMapValue(path, name, input.ReadPassword())
+	util.CheckError(err, "could not clear value")
 }

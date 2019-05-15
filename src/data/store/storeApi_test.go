@@ -129,10 +129,11 @@ func TestDataStoreRoundTrip(t *testing.T) {
 
 	secret := "password01"
 	testData := crypto.GenerateNonce()
+	testKey2 := "testKey2"
 	testValue2 := string(testData[:])
 	testEntries := []testEntry{
 		{"testKey1", "testValue1"},
-		{"testKey2", testValue2},
+		{testKey2, testValue2},
 		{"testKey3", ""}}
 
 	fmt.Println("test setting store key/values")
@@ -162,6 +163,28 @@ func TestDataStoreRoundTrip(t *testing.T) {
 	}
 
 	fmt.Println("test deletion of store value")
+	err := ClearMapValue(path, testKey2, secret)
+	if err != nil {
+		t.Errorf("could not clear map value %q '%q'", testKey2, err)
+	}
+
+	fmt.Println("test deletion of non existent store value")
+	err = ClearMapValue(path, testKey2, secret)
+	if err != ValueAbsentState {
+		t.Errorf("expected value to be absent but was %s", err)
+	}
+
+	retrievedKeys = GetMapKeys(path)
+	keyCount := len(retrievedKeys)
+	if keyCount != 2 {
+		t.Errorf("expected 2 keys but found %d", keyCount)
+	}
+
+	for _, v := range retrievedKeys {
+		if strings.EqualFold(v, testKey2) {
+			t.Errorf("expected '%s' to be absent", testKey2)
+		}
+	}
 
 	cleanup(path, t)
 }
