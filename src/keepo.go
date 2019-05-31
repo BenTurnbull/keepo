@@ -170,25 +170,24 @@ func list(path string) {
 
 func get(path, name string) []byte {
 	value, err := store.GetMapValue(path, name, input.ReadPassword())
-	if err != nil {
-		switch err.(type) {
-		case base64.CorruptInputError: // not ideal, need to use authenticated encryption
-			_, _ = fmt.Fprintln(os.Stderr, "could not decrypt, check password")
-			return nil
-		default:
-			util.CheckError(err, "could not decrypt value")
-		}
-	}
-
+	checks("could not get value", err)
 	return value
 }
 
 func set(path, name string, value string) {
 	err := store.SetMapValue(path, name, value, input.ReadPassword())
-	util.CheckError(err, "could not save store")
+	checks("could not set value", err)
 }
 
 func clear(path, name string) {
 	err := store.ClearMapValue(path, name, input.ReadPassword())
-	util.CheckError(err, "could not clear value")
+	checks("could not clear value", err)
+}
+
+func checks(message string, err error) {
+	if state, ok := err.(*store.State); ok && state == store.AuthenticationFailedState {
+		fmt.Println("\033[1;31mAuthentication Failed\033[0m")
+		os.Exit(1)
+	}
+	util.CheckError(err, message)
 }
