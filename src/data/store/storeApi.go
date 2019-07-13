@@ -12,10 +12,20 @@ import (
 	"strings"
 )
 
-const storeName = "keepo.dat"
+const DefaultStoreName = "default"
+const Extension = ".kpo"
 
-func GetStorePath(path string) string {
-	return path + string(filepath.Separator) + storeName
+func GetStorePath(storeName string) string {
+
+	executable, err := os.Executable()
+	util.CheckError(err, "could not get executable path")
+	path := filepath.Dir(executable)
+
+	if strings.HasSuffix(storeName, Extension) {
+		return path + string(filepath.Separator) + storeName
+	}
+
+	return path + string(filepath.Separator) + storeName + Extension
 }
 
 func GetMapKeys(path string) (keys []string) {
@@ -121,6 +131,13 @@ func ClearMapValue(path, dataKey, secret string) (err error) {
 	}
 
 	if _, ok := dataIndex[dataKey]; ok {
+
+		// if this is the last value delete the store
+		if len(dataIndex) == 1 {
+			err := os.Remove(storePath)
+			return err
+		}
+
 		delete(dataIndex, dataKey)
 
 		dataMap := make(map[string][]byte, len(dataIndex))
