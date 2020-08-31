@@ -215,11 +215,11 @@ func getValue(arguments []string) string {
 }
 
 func getRandomValue() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	bytes := make([]byte, 0, 32)
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	bytes := make([]byte, 32)
 	r.Read(bytes)
 
 	hash := sha256.New()
 	hash.Write(bytes)
-	return string(base64.RawURLEncoding.EncodeToString(hash.Sum(nil))[:8])
+	return base64.RawURLEncoding.EncodeToString(hash.Sum(nil))[:16]
 }
